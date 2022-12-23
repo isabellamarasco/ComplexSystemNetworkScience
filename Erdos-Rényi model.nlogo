@@ -1,66 +1,115 @@
-
-
-turtles-own [
-  infected?    ;; has the person been infected with the disease?
-  resistant?          ;; if true, the turtle can't be infected
-  virus-check-timer   ;; number of ticks since this turtle's last virus-check
+globals [my-turtles]
+turtles-own
+[
+  infected?           ;; if true, the agent is infectious, role feature
+  exposed?            ;; if true, the agent is exposed, role feature
+  recovered?          ;; if true, the agent is recovered, role feature
+  virus-recovered-period   ;; number of ticks since this agent's last virus check, i.e., the minimum recovered period of agents
 ]
 
 to setup
   clear-all
   create-turtles population
-  ;;create-turtles num-nodes
   ask turtles [
     set shape "person"
     set infected? false
     setxy random-xcor random-ycor
+    set color green
+    healthy
+    set virus-recovered-period random virus-check-frequency
+
   ]
   layout-circle turtles 10
-
-  infect
-  recolor
   reset-ticks
 end
 
-
-
-to infect
-  ask n-of num-infected turtles [
-    set infected? true
+to virus-initialization
+  ask turtles [
+    set infected? false
+    set color green
   ]
+  ask n-of initial-outbreak-size turtles
+    [ infect ]
 end
 
-to recolor
-   ask turtles [
-    ;; infected turtles are red, others are green
-    set color ifelse-value infected? [ red ] [ green ]
-  ]
-end
 
-to go-infection
-  if all? turtles [ infected? ] [ stop ]
-  spread-infection
-  recolor
+to go
+ if ( ticks >= simulation-num )
+   [stop]
+  ask turtles
+  [
+     set virus-recovered-period virus-recovered-period + 1
+     if virus-recovered-period >= virus-check-frequency
+       [ set virus-recovered-period 0 ]
+  ]
+  interaction-between-agents
   tick
-   display
-  display
+  do-virus-checks
 end
 
-to spread-infection
-  ask turtles with [ infected? ] [
-      ;; in the network variant, the disease spreads through links
-      ask link-neighbors [ set infected? true ]
+to interaction-between-agents   ;; Interactions between agents, especially between the infected agents and the healthy agents
+  ask turtles with [infected?]
+    [
+      if count my-links > 0
+      [
+      ask link-neighbors
+        [
+          if not recovered? and random-float 100 < exposed-chance
+            [ expose ]
+         ]
+      ]
+    ]
+end
+
+to do-virus-checks
+  ask turtles with [infected? and virus-recovered-period = 0]
+  [
+    if random 100 < recovery-chance
+    [
+         recover
+    ]
+  ]
+  ask turtles with [exposed?]
+   [
+     if random-float 100 < virus-spread-chance
+    [infect]
   ]
 end
 
+to expose     ;; agent plays the exposed role
+  set infected? false
+  set exposed? true
+  set recovered? false
+  set virus-recovered-period random virus-check-frequency
+  set color orange
+end
 
+to infect   ;; agent plays the infected role
+  set infected? true
+  set exposed? false
+  set recovered? false
+  set color red
+end
+
+to healthy ;; agent plays the healthy role
+  set infected? false
+  set exposed? false
+  set recovered? false
+  set color green
+end
+
+to recover  ;; agent plays the recovered role
+  set infected? false
+  set exposed? false
+  set recovered? true
+  set color [0 100 0]
+end
 
 to do-layout
   layout-spring turtles with [ any? link-neighbors ] links 0.4 6 1
-  display  ;; so we get smooth animation
+  display
   display
 end
-
 
 ;;Implementazione di Erdÿos-Ŕenyi con probabilità
 to build-network
@@ -73,8 +122,6 @@ to build-network
     ]
     repeat 1 [ do-layout ]
   ]
-
-
 end
 
 to add-friendship
@@ -97,13 +144,42 @@ to go-random
  repeat 1 [ do-layout ]
 end
 
+
 to-report max-links
   report min (list (population * (population - 1) / 2) 1000)
 end
 
+;;add and delete links with infected turtles
+to go-modify-network
+  delete-links
+  add-links
+end
 
+;;un agente sano si collega solo con un altro sano ma uno infetto si può collegare con uno sano
+to add-links
+  if ticks > max-ticks [ reset-ticks stop ]
+   if random-float 1 < add-friendship-p [
+    ask turtles with [not infected?]
+    [add-friendship]
+  ]
+end
+
+;; elimina il link con chi è infetto --> prob. xke non sempre si decide di eliminarlo
+to delete-links
+  if ticks > max-ticks [ reset-ticks stop ]
+  if random-float 1 < drop-friendship-p
+  [
+  if count links > 0 [
+    ask turtles with [infected?]
+    [
+      ask my-links [die]
+    ]
+]]
+end
+
+; elimina o aggiunge link con qualsiasi persona
 to update-network
-  if ticks > max-ticks [ stop ]
+  if ticks > max-ticks [ reset-ticks stop ]
   ifelse random-float 1 < drop-friendship-p [
     if count links > 0 [
       ask one-of links [ die ]
@@ -114,7 +190,31 @@ to update-network
 end
 
 
+to-report average-friends
+  ifelse count links > 0 [
+    report mean [count out-link-neighbors] of turtles
+  ] [
+    report 0
+  ]
+end
 
+;; controllare i risultati
+to-report average-friends-of-friends
+  ifelse count links > 0 [
+    report sum [((count out-link-neighbors) ^ 2 )] of turtles / sum [(count out-link-neighbors)] of turtles
+  ][
+    report 0
+  ]
+end
+
+
+;to-report count-links
+ ; ifelse count links > 0 [
+  ;  report [count out-link-neighbors] of turtles
+  ;][
+   ; report 0
+  ;]
+;end
 @#$#@#$#@
 GRAPHICS-WINDOW
 655
@@ -130,8 +230,8 @@ GRAPHICS-WINDOW
 1
 1
 0
-1
-1
+0
+0
 1
 -16
 16
@@ -144,10 +244,10 @@ ticks
 30.0
 
 BUTTON
-206
-69
-385
-102
+97
+10
+354
+43
 setup
 setup
 NIL
@@ -161,25 +261,25 @@ NIL
 1
 
 SLIDER
-103
-20
-265
-53
+25
+56
+125
+89
 population
 population
 0
 100
-6.0
+65.0
 1
 1
 NIL
 HORIZONTAL
 
 BUTTON
-142
-116
-237
-149
+147
+151
+242
+184
 build-network
 build-network
 NIL
@@ -193,10 +293,10 @@ NIL
 1
 
 SLIDER
-11
-116
-129
-149
+16
+151
+134
+184
 p
 p
 0
@@ -208,10 +308,10 @@ NIL
 HORIZONTAL
 
 BUTTON
-475
-114
-552
-147
+480
+150
+557
+183
 NIL
 go-random
 NIL
@@ -225,121 +325,69 @@ NIL
 1
 
 SLIDER
-341
-115
-464
-148
+346
+151
+469
+184
 num-links
 num-links
 0
-100
-6.0
+min (list (population * (population - 1) / 2) 1000)
+139.0
 1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-315
-19
-473
-52
-num-infected
-num-infected
+143
+56
+285
+89
+initial-outbreak-size
+initial-outbreak-size
 0
 population - 1
-2.0
+11.0
 1
 1
 NIL
 HORIZONTAL
 
-BUTTON
-16
-382
-125
-415
-NIL
-go-infection\n
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
-BUTTON
-141
-382
-250
-415
-NIL
-go-infection\n
-T
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-0
-
 MONITOR
-1104
-212
-1270
-257
-NIL
+1100
+222
+1160
+267
+Infected
 count turtles with [infected?]
 3
 1
 11
 
-PLOT
-1101
-20
-1403
-195
-Infection Vs Time
-Time
-NIL
-0.0
-10.0
-0.0
-1.0
-true
-true
-"" ""
-PENS
-"population" 1.0 0 -5298144 true "" "plot count turtles with [infected?]/ count turtles"
-
 SLIDER
-11
-168
-156
-201
+15
+260
+160
+293
 drop-friendship-p
 drop-friendship-p
 0
 1
-0.3
+0.8
 0.1
 1
 NIL
 HORIZONTAL
 
 BUTTON
-258
-176
-366
-209
+262
+256
+393
+289
 update-network
 update-network
-T
+NIL
 1
 T
 OBSERVER
@@ -350,30 +398,294 @@ NIL
 1
 
 INPUTBOX
-172
-165
-243
-225
+179
+251
+244
+311
 max-ticks
-5.0
+10.0
 1
 0
 Number
 
 SLIDER
-23
-294
-195
-327
-add-friendship-p
-add-friendship-p
+16
+202
+175
+235
+virus-check-frequency
+virus-check-frequency
+0
+10
+5.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+186
+202
+343
+235
+virus-spread-chance
+virus-spread-chance
 0
 1
-0.5
+0.4
 0.1
 1
 NIL
 HORIZONTAL
+
+SLIDER
+354
+202
+487
+235
+recovery-chance
+recovery-chance
+0
+1
+0.3
+0.1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+495
+202
+631
+235
+exposed-chance
+exposed-chance
+0
+1
+0.2
+0.1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+297
+57
+439
+90
+simulation-num
+simulation-num
+0
+5000
+1496.0
+1
+1
+NIL
+HORIZONTAL
+
+BUTTON
+119
+403
+410
+436
+NIL
+go
+T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+62
+101
+395
+134
+NIL
+virus-initialization
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+0
+
+PLOT
+1100
+19
+1401
+210
+Status-virus
+time
+%
+0.0
+10.0
+0.0
+10.0
+true
+true
+"" ""
+PENS
+"healthy" 1.0 0 -14439633 true "" "plot (count turtles with [not infected? and not recovered? and not exposed?]) / (count turtles) * 100"
+"infected" 1.0 0 -5298144 true "" "plot(count turtles with [infected?]) / (count turtles) * 100"
+"recovered" 1.0 0 -13210332 true "" "plot(count turtles with [recovered?]) / (count turtles) * 100"
+"exposed" 1.0 0 -955883 true "" "plot(count turtles with [exposed?])/(count turtles) * 100"
+
+MONITOR
+1101
+277
+1265
+322
+average-friends
+average-friends
+17
+1
+11
+
+MONITOR
+1101
+335
+1267
+380
+average-friends-of-friends
+average-friends-of-friends
+17
+1
+11
+
+BUTTON
+373
+318
+562
+351
+add links without infected
+add-links
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+213
+601
+367
+634
+go-modify-network
+go-modify-network
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+MONITOR
+1173
+221
+1243
+266
+Recovered
+count turtles with [recovered?]
+17
+1
+11
+
+MONITOR
+1257
+221
+1323
+266
+Exposed
+count turtles with [exposed?]
+17
+1
+11
+
+BUTTON
+297
+358
+451
+391
+add or delete links
+go-modify-network
+T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+SLIDER
+14
+312
+160
+345
+add-friendship-p
+add-friendship-p
+0
+1
+0.3
+0.1
+1
+NIL
+HORIZONTAL
+
+BUTTON
+179
+319
+361
+352
+delete links with infected
+delete-links
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+MONITOR
+1103
+386
+1169
+431
+num links
+count links
+17
+1
+11
+
+MONITOR
+1336
+220
+1401
+265
+Healthy
+count turtles with [not infected? and not recovered? and not exposed?]
+17
+1
+11
 
 @#$#@#$#@
 ## WHAT IS IT?
