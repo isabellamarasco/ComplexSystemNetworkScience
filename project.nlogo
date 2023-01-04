@@ -10,7 +10,7 @@ turtles-own
   exposed?            ;; if true, the agent is exposed, role feature
   recovered?          ;; if true, the agent is recovered, role feature
   healthy?
-  virus-recovered-period   ;; number of ticks since this agent's last virus check, i.e., the minimum recovered period of agents
+  virus-recovered-period   ;; number of ticks since this agent's last virus check
   strategy
   payoff
   my-clustering-coefficient   ; the current clustering coefficient of this node
@@ -18,6 +18,7 @@ turtles-own
 
 to setup
   clear-all
+  random-seed 42
   create-turtles population
   let payoffs [[1 0][0 1]]
   set payoff-matrix payoffs
@@ -44,7 +45,7 @@ end
 to virus-initialization
   if infection = true [
     ask turtles [healthy]
-    ask n-of initial-outbreak-size turtles [infect]
+    ask n-of initial-infected turtles [infect]
   ]
 end
 
@@ -101,7 +102,7 @@ to-report max-links
   report min (list (population * (population - 1) / 2) 50000)
 end
 
-; GAME THEORY
+; Game theory
 to go-game
    ifelse game-theory = true[
     if (ticks >= max-ticks )[stop]
@@ -125,12 +126,14 @@ to update-strategy
   ;;selezioniamo un altro giocatore contro il quale giocare
     if item ([strategy] of another-turtle) (item strategy payoff-matrix) = 1 [
     ifelse infection = false [
+       if random-float 1 < add-friendship-p[
       add-friendship
-  ][create-link-with one-of other turtles with [not infected?]]]
+  ]][create-link-with one-of other turtles with [not infected?]]]
 end
 
+
 ;; Infection diffusion model
-to interaction-between-agents   ;; Interactions between agents, especially between the infected agents and the healthy agents
+to interaction-between-agents
   ask turtles with [infected?][
       if count my-links > 0[
       ask link-neighbors[
@@ -140,13 +143,13 @@ to interaction-between-agents   ;; Interactions between agents, especially betwe
 end
 
 to do-virus-checks
-  ask turtles with [infected? and virus-recovered-period = 0][
+  ask turtles with [(infected? and virus-recovered-period = 0) or exposed? and virus-recovered-period = 0][
     if random 100 < recovery-chance[
       recover]]
   ask turtles with [exposed?][
      if random-float 100 < virus-spread-chance[
       infect
-    ]]
+  ]]
 end
 
 to expose
@@ -208,18 +211,21 @@ end
 
 ;;add or delete links with infected turtles
 to go-modify-network
-  ifelse random-float 1 < drop-friendship-p[
-    delete-infected-links
-  ][add-link-pop]
+  ifelse infection = true[
+  if ticks >= max-ticks [stop]
+  ifelse random-float 1 < add-friendship-p[
+   add-link-good
+  ][delete-infected-links]][stop]
+
 end
 
-;; add friendship with people more popular and good reputation
-to add-link-pop
-  if ticks >= max-ticks [stop]
+;; add friendship with good reputation
+to add-link-good
     ask turtles [
-    if (count-links <= popular)[
-          create-link-with one-of other turtles with [not infected?] with [count my-links >= popular]
-    ]]
+    if count-links > 0 [
+        if (count turtles with [not infected?] != nobody)[
+        create-link-with one-of other turtles with [not infected?]
+  ]]]
  tick
 end
 
@@ -246,7 +252,6 @@ end
 
 
 ;;Metrics
-
 to-report average-friends
   ifelse count links > 0 [
     report mean [count out-link-neighbors] of turtles
@@ -312,10 +317,10 @@ ticks
 30.0
 
 BUTTON
-97
-10
-354
-43
+109
+59
+508
+93
 setup
 setup
 NIL
@@ -329,25 +334,25 @@ NIL
 1
 
 SLIDER
-25
-56
-125
-89
+6
+14
+106
+47
 population
 population
 0
 300
-39.0
+200.0
 1
 1
 NIL
 HORIZONTAL
 
 BUTTON
-147
-151
-242
-184
+175
+109
+270
+142
 build-network
 build-network
 NIL
@@ -361,10 +366,10 @@ NIL
 1
 
 SLIDER
-16
-151
-134
-184
+44
+109
+162
+142
 p
 p
 0
@@ -376,10 +381,10 @@ NIL
 HORIZONTAL
 
 BUTTON
-480
-150
-557
-183
+525
+108
+602
+141
 NIL
 go-random
 NIL
@@ -393,25 +398,25 @@ NIL
 1
 
 SLIDER
-143
-56
-285
-89
-initial-outbreak-size
-initial-outbreak-size
+114
+14
+243
+47
+initial-infected
+initial-infected
 0
 population - 1
-24.0
+120.0
 1
 1
 NIL
 HORIZONTAL
 
 MONITOR
-1075
-230
-1135
-275
+1079
+272
+1139
+317
 Infected
 count turtles with [infected?]
 3
@@ -419,25 +424,25 @@ count turtles with [infected?]
 11
 
 SLIDER
-15
-260
-160
-293
+136
+419
+311
+452
 drop-friendship-p
 drop-friendship-p
 0
 1
-0.3
+1.0
 0.1
 1
 NIL
 HORIZONTAL
 
 BUTTON
-262
-256
-448
-289
+338
+420
+524
+453
 update-network-random
 update-network
 T
@@ -450,42 +455,46 @@ NIL
 NIL
 1
 
-INPUTBOX
-377
-11
-452
-71
-max-ticks
-1000.0
-1
-0
-Number
-
 SLIDER
-16
-202
-175
-235
+10
+185
+178
+218
 virus-check-frequency
 virus-check-frequency
 0
 10
-10.0
+5.0
 1
+1
+ticks
+HORIZONTAL
+
+SLIDER
+190
+184
+347
+217
+virus-spread-chance
+virus-spread-chance
+0
+1
+0.3
+0.1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-186
-202
-343
-235
-virus-spread-chance
-virus-spread-chance
+498
+183
+622
+216
+recovery-chance
+recovery-chance
 0
 1
-1.0
+0.3
 0.1
 1
 NIL
@@ -493,39 +502,24 @@ HORIZONTAL
 
 SLIDER
 354
-202
-487
-235
-recovery-chance
-recovery-chance
-0
-1
-1.0
-0.1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-495
-202
-631
-235
+183
+490
+216
 exposed-chance
 exposed-chance
 0
 1
-1.0
+0.2
 0.1
 1
 NIL
 HORIZONTAL
 
 BUTTON
-119
-403
-410
-436
+338
+233
+611
+267
 diffusion infection
 go
 T
@@ -539,10 +533,10 @@ NIL
 1
 
 BUTTON
-62
-101
-395
-134
+55
+233
+309
+267
 NIL
 virus-initialization
 NIL
@@ -556,13 +550,13 @@ NIL
 0
 
 PLOT
-1077
+1078
 10
-1438
-213
+1516
+263
 Status-virus
-time
-%
+Time
+% Population
 0.0
 10.0
 0.0
@@ -577,10 +571,10 @@ PENS
 "exposed" 1.0 0 -955883 true "" "plot(count turtles with [exposed?])/(count turtles) * 100"
 
 MONITOR
-1076
-285
-1240
-330
+886
+493
+1050
+538
 average-friends
 average-friends
 5
@@ -588,10 +582,10 @@ average-friends
 11
 
 MONITOR
-1076
-343
-1242
-388
+885
+546
+1051
+591
 average-friends-of-friends
 average-friends-of-friends
 5
@@ -599,10 +593,10 @@ average-friends-of-friends
 11
 
 MONITOR
-1148
-229
-1218
-274
+1152
+271
+1222
+316
 Recovered
 count turtles with [recovered?]
 17
@@ -610,10 +604,10 @@ count turtles with [recovered?]
 11
 
 MONITOR
-1232
-229
-1298
-274
+1236
+271
+1302
+316
 Exposed
 count turtles with [exposed?]
 17
@@ -621,11 +615,11 @@ count turtles with [exposed?]
 11
 
 BUTTON
-297
-358
-451
-391
-add or delete links
+197
+275
+482
+309
+add or delete infected links
 go-modify-network
 T
 1
@@ -638,42 +632,25 @@ NIL
 1
 
 SLIDER
-14
-312
-160
-345
+15
+276
+161
+309
 add-friendship-p
 add-friendship-p
 0
 1
-0.5
+0.3
 0.1
 1
 NIL
 HORIZONTAL
 
-BUTTON
-179
-319
-361
-352
-delete links with infected
-delete-infected-links
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
 MONITOR
-1219
-401
-1285
-446
+1206
+326
+1272
+371
 num links
 count links
 17
@@ -681,10 +658,10 @@ count links
 11
 
 MONITOR
-1311
-228
-1376
-273
+1315
+270
+1380
+315
 Healthy
 count turtles with [not infected? and not recovered? and not exposed?]
 17
@@ -692,71 +669,21 @@ count turtles with [not infected? and not recovered? and not exposed?]
 11
 
 MONITOR
-1078
-401
-1203
-446
+885
+597
+1010
+642
 clustering coefficient
 clustering-coefficient
-5
+2
 1
 11
 
-PLOT
-1078
-458
-1331
-608
-Degree Distribution
-Degree
-# Population
-0.0
-10.0
-0.0
-10.0
-true
-false
-"clear-plot\nset-plot-y-range 0 population" "set-plot-x-range 0 (max [count my-links] of turtles) + 1"
-PENS
-"default" 1.0 1 -16777216 true "" "histogram [count my-links] of turtles"
-
-SLIDER
-14
-354
-163
-387
-popular
-popular
-0
-max-popular
-28.0
-1
-1
-NIL
-HORIZONTAL
-
-BUTTON
-375
-318
-489
-351
-NIL
-add-link-pop
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
 MONITOR
-1267
-310
-1376
-355
+1080
+327
+1189
+372
 link more popular
 max-popular
 10
@@ -764,25 +691,25 @@ max-popular
 11
 
 SLIDER
-332
-150
-467
-183
+377
+108
+512
+141
 num-links
 num-links
 0
 max-links
-741.0
+13876.0
 1
 1
 NIL
 HORIZONTAL
 
 SWITCH
-482
-19
+495
+14
 620
-52
+47
 game-theory
 game-theory
 1
@@ -790,10 +717,10 @@ game-theory
 -1000
 
 SWITCH
-484
-64
-595
-97
+379
+14
+490
+47
 infection
 infection
 1
@@ -801,13 +728,13 @@ infection
 -1000
 
 PLOT
-517
-461
-870
-611
-Strategy Distribution
-NIL
-NIL
+1077
+384
+1566
+677
+Strategy Game Theory Distribution
+Time
+# Population
 0.0
 10.0
 0.0
@@ -820,10 +747,10 @@ PENS
 "Popular" 1.0 0 -8990512 true "" "plot count turtles with [strategy = 1]"
 
 BUTTON
-425
-402
-513
-435
+333
+344
+521
+378
 NIL
 go-game
 T
@@ -834,6 +761,106 @@ NIL
 NIL
 NIL
 NIL
+1
+
+PLOT
+438
+463
+876
+779
+AVG_f Vs AVG_ff
+Time
+#Population
+0.0
+10.0
+0.0
+10.0
+true
+true
+"clear-plot\nset-plot-y-range 0 population" "set-plot-x-range 0 max list 1 ticks"
+PENS
+"AVG_f" 1.0 0 -14730904 true "" "plot average-friends"
+"AVG_ff" 1.0 0 -4699768 true "" "plot average-friends-of-friends"
+
+MONITOR
+884
+648
+1021
+693
+Diff AVG_ff and AVG_f
+average-friends-of-friends - average-friends
+5
+1
+11
+
+SLIDER
+137
+344
+310
+377
+popular
+popular
+0
+max-popular
+67.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+253
+14
+371
+47
+max-ticks
+max-ticks
+0
+2000
+1000.0
+1
+1
+NIL
+HORIZONTAL
+
+TEXTBOX
+248
+160
+437
+180
+Diffusion infection model
+13
+0.0
+1
+
+TEXTBOX
+279
+316
+446
+342
+Game Theory
+13
+0.0
+1
+
+TEXTBOX
+276
+389
+443
+409
+Both Models
+13
+0.0
+1
+
+TEXTBOX
+12
+751
+208
+807
+Isabella Marasco - 1040993\nisabella.marasco3@studio.unibo.it
+11
+0.0
 1
 
 @#$#@#$#@
